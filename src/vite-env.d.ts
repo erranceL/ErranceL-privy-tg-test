@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_PRIVY_APP_ID: string;
   readonly VITE_LOG_ENDPOINT?: string;
+  readonly VITE_LOGIN_API_BASE?: string;
+  readonly VITE_BIZ_PF?: string;
 }
 
 interface ImportMeta {

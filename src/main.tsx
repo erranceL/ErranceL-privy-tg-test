@@ -33,7 +33,7 @@ createRoot(rootEl).render(
       config={{
         loginMethods: ['telegram'],
         embeddedWallets: {
-          ethereum: { createOnLogin: 'off' },
+          ethereum: { createOnLogin: 'users-without-wallets' },
           solana: { createOnLogin: 'off' },
         },
         appearance: { theme: 'light' },

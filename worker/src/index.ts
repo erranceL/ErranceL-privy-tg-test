@@ -86,7 +86,10 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
 
   const text = msg.text.trim();
 
-  if (text === '/start' || text.startsWith('/start ')) {
+  const firstToken = text.split(/\s+/)[0] ?? '';
+  const command = firstToken.split('@')[0];
+
+  if (command === '/start') {
     const chatType = msg.chat?.type ?? 'unknown';
     const reply = [
       'privy tg test demo, click menu to open',

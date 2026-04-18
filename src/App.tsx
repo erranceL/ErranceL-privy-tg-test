@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePrivy, useLoginWithTelegram } from '@privy-io/react-auth';
+import {
+  usePrivy,
+  useLoginWithTelegram,
+  useIdentityToken,
+  type User,
+} from '@privy-io/react-auth';
 import { emitToast } from './toast';
+import {
+  exchangeJwt,
+  previewJwt,
+  ERRNO_NOT_WHITELISTED,
+  type LoginMethod,
+} from './loginApi';
 
 function normalizeError(err: unknown): { type: string; code: string; msg: string } {
   const type = typeof err;
@@ -59,12 +70,127 @@ function useTelegramWebApp() {
   return window.Telegram?.WebApp;
 }
 
+function deriveMethod(loginMethod: string | null | undefined, user: User | null): LoginMethod {
+  if (loginMethod === 'telegram') return 'telegram';
+  if (loginMethod === 'email') return 'email';
+  if (user?.email) return 'email';
+  return 'wallet';
+}
+
+function deriveAddress(user: User | null): string | null {
+  if (!user) return null;
+  if (user.wallet?.address) return user.wallet.address;
+  const linked = (user.linkedAccounts ?? []) as unknown as Array<Record<string, unknown>>;
+  for (const acc of linked) {
+    if (typeof acc.address === 'string' && acc.address.length > 0) return acc.address;
+  }
+  return null;
+}
+
 export default function App() {
   const { ready, authenticated, user, logout, getAccessToken } = usePrivy();
+  const { identityToken } = useIdentityToken();
 
   const completeLockRef = useRef(false);
   const restoredLockRef = useRef(false);
+  const exchangingRef = useRef(false);
   const [accessTokenPreview, setAccessTokenPreview] = useState<string | null>(null);
+  const [businessJwtPreview, setBusinessJwtPreview] = useState<string | null>(null);
+  const [loginApiState, setLoginApiState] = useState<
+    { kind: 'idle' } | { kind: 'pending' } | { kind: 'success' } | { kind: 'error'; errno: string; msg: string }
+  >({ kind: 'idle' });
+
+  const LOGIN_API_BASE = import.meta.env.VITE_LOGIN_API_BASE ?? '';
+  const BIZ_PF = import.meta.env.VITE_BIZ_PF ?? '4';
+
+  const runLoginExchange = useCallback(
+    async (opts: { restored: boolean; loginMethod?: string | null }): Promise<void> => {
+      if (exchangingRef.current) return;
+      if (!LOGIN_API_BASE) {
+        emitToast(
+          'info',
+          '未配置 VITE_LOGIN_API_BASE，跳过业务 /login 调用（仅验证 Privy 链路）',
+        );
+        return;
+      }
+      exchangingRef.current = true;
+      setLoginApiState({ kind: 'pending' });
+      try {
+        const [accessToken, identityTokenVal] = await Promise.all([
+          getAccessToken().catch(() => null),
+          Promise.resolve(identityToken),
+        ]);
+
+        if (!accessToken) {
+          emitToast('error', '[/login 跳过] Privy accessToken 为空');
+          setLoginApiState({ kind: 'error', errno: 'no_access_token', msg: 'missing privy access_token' });
+          return;
+        }
+        if (!identityTokenVal) {
+          emitToast('error', '[/login 跳过] Privy identityToken 为空（useIdentityToken 还没好？）');
+          setLoginApiState({ kind: 'error', errno: 'no_identity_token', msg: 'missing privy identity_token' });
+          return;
+        }
+
+        const address = deriveAddress(user);
+        if (!address) {
+          emitToast('error', '[/login 跳过] 没拿到 address（embedded wallet 未就绪）');
+          setLoginApiState({ kind: 'error', errno: 'no_address', msg: 'no wallet address' });
+          return;
+        }
+
+        const method = deriveMethod(opts.loginMethod, user);
+
+        emitToast(
+          'info',
+          `[/login 开始] ${opts.restored ? '(restored)' : ''} method=${method} addr=${address.slice(0, 8)}…`,
+        );
+
+        const result = await exchangeJwt(LOGIN_API_BASE, BIZ_PF, {
+          access_token: accessToken,
+          identity_token: identityTokenVal,
+          address,
+          method,
+        });
+
+        if (result.ok) {
+          setBusinessJwtPreview(previewJwt(result.businessJwt));
+          setLoginApiState({ kind: 'success' });
+          emitToast(
+            'success',
+            `[/login OK] jwt=${previewJwt(result.businessJwt)} wallet_approve_state=${String(result.walletApproveState)}`,
+          );
+          return;
+        }
+
+        setLoginApiState({ kind: 'error', errno: result.errno, msg: result.msg });
+        emitToast(
+          'error',
+          `[/login FAIL] errno=${result.errno} | http=${result.httpStatus} | msg=${result.msg}`,
+        );
+
+        if (result.errno === ERRNO_NOT_WHITELISTED) {
+          emitToast(
+            'info',
+            `检测到 errno=${ERRNO_NOT_WHITELISTED}（不在白名单），自动清理 Privy session 防止死循环`,
+          );
+          try {
+            await logout();
+          } catch (e) {
+            console.warn('[privy] logout after 10010012 failed', e);
+          }
+          clearPrivyLocalStorage();
+        }
+      } catch (e) {
+        const { type, code, msg } = normalizeError(e);
+        emitToast('error', `[/login throw] type=${type} | code=${code} | msg=${msg}`);
+        setLoginApiState({ kind: 'error', errno: code, msg });
+      } finally {
+        exchangingRef.current = false;
+      }
+    },
+    [LOGIN_API_BASE, BIZ_PF, getAccessToken, identityToken, user, logout],
+  );
 
   const { login, state } = useLoginWithTelegram({
     onComplete: ({ user: u, isNewUser, wasAlreadyAuthenticated, loginMethod }) => {
@@ -85,7 +211,7 @@ export default function App() {
         emitToast(
           'success',
           [
-            `登录成功`,
+            `[privy OK]`,
             `method=${loginMethod ?? 'n/a'}`,
             `user=${u.id}`,
             `new=${isNewUser}`,
@@ -93,12 +219,19 @@ export default function App() {
             `token=${preview}`,
           ].join(' | '),
         );
+
+        await runLoginExchange({ restored: false, loginMethod });
       })();
     },
     onError: (err) => {
       const { type, code, msg } = normalizeError(err);
-      emitToast('error', `登录失败 | type=${type} | code=${code} | msg=${msg}`);
+      emitToast('error', `[privy FAIL] type=${type} | code=${code} | msg=${msg}`);
       console.error('[privy] onError raw:', err);
+      if (typeof err === 'string' && err === 'exited_auth_flow') {
+        queueMicrotask(() => {
+          void login().catch(() => undefined);
+        });
+      }
     },
   });
 
@@ -115,21 +248,27 @@ export default function App() {
         }
         const preview = token ? token.slice(0, 12) + '…' : 'n/a';
         setAccessTokenPreview(preview);
-        emitToast('info', `检测到已登录，自动恢复 | user=${user?.id ?? 'n/a'} | token=${preview}`);
+        emitToast(
+          'info',
+          `[privy restored] user=${user?.id ?? 'n/a'} | token=${preview}`,
+        );
+        await runLoginExchange({ restored: true });
       })();
     }
     if (!authenticated) {
       restoredLockRef.current = false;
       setAccessTokenPreview(null);
+      setBusinessJwtPreview(null);
+      setLoginApiState({ kind: 'idle' });
     }
-  }, [ready, authenticated, user?.id, getAccessToken]);
+  }, [ready, authenticated, user?.id, getAccessToken, runLoginExchange]);
 
   const handleLogin = useCallback(async () => {
     try {
       await login();
     } catch (err) {
       const { type, code, msg } = normalizeError(err);
-      emitToast('error', `login() 抛错 | type=${type} | code=${code} | msg=${msg}`);
+      emitToast('error', `[privy login()] throw | type=${type} | code=${code} | msg=${msg}`);
       console.error('[privy] login() throw:', err);
     }
   }, [login]);
@@ -156,7 +295,15 @@ export default function App() {
       loginError:
         state.status === 'error' ? normalizeError((state as { error: unknown }).error) : null,
       user,
+      address: deriveAddress(user),
       accessTokenPreview,
+      identityTokenPresent: Boolean(identityToken),
+      loginApi: {
+        base: LOGIN_API_BASE || '(not configured)',
+        bizPf: BIZ_PF,
+        state: loginApiState,
+        businessJwtPreview,
+      },
       telegramEnv: {
         webAppPresent: Boolean(tg),
         initDataPresent: Boolean(tg?.initData),
@@ -165,7 +312,21 @@ export default function App() {
       },
       buildBase: import.meta.env.BASE_URL,
     }),
-    [ready, authenticated, state, user, accessTokenPreview, tg, initDataPrefix, tgUnsafeUser],
+    [
+      ready,
+      authenticated,
+      state,
+      user,
+      accessTokenPreview,
+      identityToken,
+      LOGIN_API_BASE,
+      BIZ_PF,
+      loginApiState,
+      businessJwtPreview,
+      tg,
+      initDataPrefix,
+      tgUnsafeUser,
+    ],
   );
 
   const loading = state.status === 'loading';
