@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_PRIVY_APP_ID: string;
+  readonly VITE_LOG_ENDPOINT?: string;
 }
 
 interface ImportMeta {

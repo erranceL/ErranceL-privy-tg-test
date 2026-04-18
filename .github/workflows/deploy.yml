@@ -41,6 +41,7 @@ jobs:
       - name: Build
         env:
           VITE_PRIVY_APP_ID: ${{ vars.VITE_PRIVY_APP_ID || secrets.VITE_PRIVY_APP_ID }}
+          VITE_LOG_ENDPOINT: ${{ vars.VITE_LOG_ENDPOINT || secrets.VITE_LOG_ENDPOINT }}
         run: pnpm build
 
       - name: Configure Pages

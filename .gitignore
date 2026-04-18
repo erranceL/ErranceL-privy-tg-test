@@ -7,6 +7,9 @@ dist-ssr
 .cache
 *.tsbuildinfo
 
+.wrangler
+.dev.vars
+
 .env
 .env.local
 .env.*.local

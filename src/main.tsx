@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { PrivyProvider } from '@privy-io/react-auth';
 import App from './App';
 import { Toaster } from './Toaster';
+import { initRemoteLog } from './remoteLog';
+
+initRemoteLog(import.meta.env.VITE_LOG_ENDPOINT);
 
 const FALLBACK_APP_ID = 'cmbir1ip600bejx0mu6b42iek';
 

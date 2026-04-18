@@ -1,0 +1,15 @@
+name = "privy-tg-test-worker"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ALLOWED_ORIGIN = "https://errancel.github.io"
+# LOG_CHAT_ID will be set via: npx wrangler secret put LOG_CHAT_ID   (or as a non-secret var below)
+# Uncomment and fill after you know the chat id:
+# LOG_CHAT_ID = "-1001234567890"
+
+# Secrets (set via CLI, do not commit):
+#   npx wrangler secret put TG_BOT_TOKEN
+#   npx wrangler secret put WEBHOOK_SECRET
+#   npx wrangler secret put LOG_CHAT_ID
