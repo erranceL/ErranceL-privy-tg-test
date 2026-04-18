@@ -40,7 +40,7 @@ jobs:
 
       - name: Build
         env:
-          VITE_PRIVY_APP_ID: ${{ secrets.VITE_PRIVY_APP_ID }}
+          VITE_PRIVY_APP_ID: ${{ vars.VITE_PRIVY_APP_ID || secrets.VITE_PRIVY_APP_ID }}
         run: pnpm build
 
       - name: Configure Pages
