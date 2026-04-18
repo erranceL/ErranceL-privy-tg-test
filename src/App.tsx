@@ -72,7 +72,6 @@ function useTelegramWebApp() {
 }
 
 function deriveMethod(loginMethod: string | null | undefined, user: User | null): LoginMethod {
-  if (loginMethod === 'telegram') return 'telegram';
   if (loginMethod === 'email') return 'email';
   if (user?.email) return 'email';
   return 'wallet';

@@ -14,7 +14,7 @@
  *     success: errno in {"0", 0, "200"}, data is either a JWT string or { access_token, wallet_approve_state }
  */
 
-export type LoginMethod = 'wallet' | 'email' | 'telegram';
+export type LoginMethod = 'wallet' | 'email';
 
 export interface ExchangeInput {
   access_token: string;
