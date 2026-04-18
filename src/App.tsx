@@ -158,16 +158,17 @@ export default function App() {
         }
 
         const method = deriveMethod(opts.loginMethod, user);
+        const addressLower = address.toLowerCase();
 
         emitToast(
           'info',
-          `[/login 开始] ${opts.restored ? '(restored)' : ''} method=${method} addr=${address.slice(0, 8)}…`,
+          `[/login 开始] ${opts.restored ? '(restored)' : ''} method=${method} addr=${addressLower.slice(0, 10)}…`,
         );
 
         const result = await exchangeJwt(LOGIN_API_BASE, BIZ_PF, {
           access_token: accessToken,
           identity_token: identityTokenVal,
-          address,
+          address: addressLower,
           method,
         });
 

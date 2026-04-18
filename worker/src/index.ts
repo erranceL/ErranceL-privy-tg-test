@@ -154,19 +154,62 @@ async function handleLog(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: 'bad json' }, 400, cors);
   }
 
-  const text = formatLogPayload(payload);
+  const htmlText = formatLogPayload(payload);
 
   try {
-    const resp = await sendMessage(env, env.LOG_CHAT_ID, text, { parse_mode: 'HTML' });
+    let resp = await sendMessage(env, env.LOG_CHAT_ID, htmlText, { parse_mode: 'HTML' });
+    let upstreamBody = '';
     if (!resp.ok) {
-      const body = await resp.text();
-      return json({ ok: false, upstream: resp.status, body }, 502, cors);
+      upstreamBody = await resp.text();
+      const plainText = formatLogPayloadPlain(payload);
+      const resp2 = await sendMessage(env, env.LOG_CHAT_ID, plainText);
+      if (!resp2.ok) {
+        const body2 = await resp2.text();
+        return json(
+          {
+            ok: false,
+            upstream_html_status: resp.status,
+            upstream_html_body: upstreamBody,
+            upstream_plain_status: resp2.status,
+            upstream_plain_body: body2,
+          },
+          200,
+          cors,
+        );
+      }
+      return json({ ok: true, note: 'html fallback used', upstream_html_body: upstreamBody }, 200, cors);
     }
   } catch (e) {
-    return json({ ok: false, error: String(e) }, 500, cors);
+    return json({ ok: false, error: String(e) }, 200, cors);
   }
 
   return json({ ok: true }, 200, cors);
+}
+
+function formatLogPayloadPlain(payload: any): string {
+  const kind = String(payload?.kind ?? 'info').toLowerCase();
+  const tag = kind === 'error' ? '[ERR]' : kind === 'success' ? '[OK ]' : '[ i ]';
+  const msg = String(payload?.msg ?? '(no msg)');
+  const ts = new Date(Number(payload?.ts) || Date.now()).toISOString();
+  const url = String(payload?.url ?? '');
+  let ctxStr = '';
+  if (payload?.ctx) {
+    try {
+      ctxStr =
+        typeof payload.ctx === 'string' ? payload.ctx : JSON.stringify(payload.ctx, null, 2);
+    } catch {
+      ctxStr = String(payload.ctx);
+    }
+    if (ctxStr.length > 2500) ctxStr = ctxStr.slice(0, 2500) + '\n…(truncated)';
+  }
+  return [
+    `${tag} ${kind}  ${ts}`,
+    `msg: ${msg}`,
+    url ? `url: ${url}` : '',
+    ctxStr ? `ctx:\n${ctxStr}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export default {
