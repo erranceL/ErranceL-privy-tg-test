@@ -34,7 +34,6 @@ createRoot(rootEl).render(
         loginMethods: ['telegram'],
         embeddedWallets: {
           ethereum: { createOnLogin: 'users-without-wallets' },
-          solana: { createOnLogin: 'off' },
         },
         appearance: { theme: 'light' },
       }}

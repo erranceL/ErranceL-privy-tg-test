@@ -74,7 +74,8 @@ export function initRemoteLog(configuredEndpoint: string | undefined | null) {
     console.info('[remoteLog] disabled (VITE_LOG_ENDPOINT not set)');
     return;
   }
-  endpoint = configuredEndpoint.replace(/\/$/, '') + '/log';
+  const trimmed = configuredEndpoint.replace(/\/$/, '');
+  endpoint = /\/log$/i.test(trimmed) ? trimmed : trimmed + '/log';
   console.info('[remoteLog] enabled →', endpoint);
 
   onToastAdded((item) => {
