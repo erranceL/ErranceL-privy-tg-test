@@ -37,6 +37,25 @@ function safeStringify(v: unknown): string {
   }
 }
 
+function decodeJwtPayload(jwt: string | null): unknown {
+  if (!jwt) return null;
+  const parts = jwt.split('.');
+  if (parts.length < 2) return { _error: 'not a jwt' };
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const json = decodeURIComponent(
+      atob(padded)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return { _error: String(e) };
+  }
+}
+
 function clearPrivyLocalStorage(): number {
   let removed = 0;
   for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -100,6 +119,7 @@ export default function App() {
   const restoredLockRef = useRef(false);
   const exchangingRef = useRef(false);
   const [accessTokenPreview, setAccessTokenPreview] = useState<string | null>(null);
+  const [decodedAccessToken, setDecodedAccessToken] = useState<unknown>(null);
   const [businessJwtPreview, setBusinessJwtPreview] = useState<string | null>(null);
   const [loginApiState, setLoginApiState] = useState<
     { kind: 'idle' } | { kind: 'pending' } | { kind: 'success' } | { kind: 'error'; errno: string; msg: string }
@@ -227,6 +247,7 @@ export default function App() {
         }
         const preview = token ? token.slice(0, 12) + '…' : 'n/a';
         setAccessTokenPreview(preview);
+        setDecodedAccessToken(decodeJwtPayload(token));
         emitToast(
           'success',
           [
@@ -267,6 +288,7 @@ export default function App() {
         }
         const preview = token ? token.slice(0, 12) + '…' : 'n/a';
         setAccessTokenPreview(preview);
+        setDecodedAccessToken(decodeJwtPayload(token));
         emitToast(
           'info',
           `[privy restored] user=${user?.id ?? 'n/a'} | token=${preview}`,
@@ -316,7 +338,9 @@ export default function App() {
       user,
       address: deriveAddress(user),
       accessTokenPreview,
+      decodedAccessToken,
       identityTokenPresent: Boolean(identityToken),
+      decodedIdentityToken: decodeJwtPayload(identityToken),
       loginApi: {
         base: LOGIN_API_BASE || '(not configured)',
         bizPf: BIZ_PF,
@@ -337,6 +361,7 @@ export default function App() {
       state,
       user,
       accessTokenPreview,
+      decodedAccessToken,
       identityToken,
       LOGIN_API_BASE,
       BIZ_PF,
