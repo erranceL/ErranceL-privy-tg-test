@@ -3,6 +3,7 @@ import {
   usePrivy,
   useLoginWithTelegram,
   useIdentityToken,
+  useCreateWallet,
   type User,
 } from '@privy-io/react-auth';
 import { emitToast } from './toast';
@@ -90,6 +91,11 @@ function deriveAddress(user: User | null): string | null {
 export default function App() {
   const { ready, authenticated, user, logout, getAccessToken } = usePrivy();
   const { identityToken } = useIdentityToken();
+  const { createWallet } = useCreateWallet({
+    onError: (err) => {
+      console.warn('[privy] createWallet onError', err);
+    },
+  });
 
   const completeLockRef = useRef(false);
   const restoredLockRef = useRef(false);
@@ -132,11 +138,24 @@ export default function App() {
           return;
         }
 
-        const address = deriveAddress(user);
+        let address = deriveAddress(user);
         if (!address) {
-          emitToast('error', '[/login 跳过] 没拿到 address（embedded wallet 未就绪）');
-          setLoginApiState({ kind: 'error', errno: 'no_address', msg: 'no wallet address' });
-          return;
+          emitToast('info', '[/login 前置] 无 address，调用 createWallet() 补钱包…');
+          try {
+            const w = await createWallet();
+            address = w?.address ?? null;
+            emitToast('info', `[/login 前置] createWallet OK | addr=${address ? address.slice(0, 10) + '…' : 'n/a'}`);
+          } catch (e) {
+            const n = normalizeError(e);
+            emitToast('error', `[/login 跳过] createWallet 抛错 | code=${n.code} | msg=${n.msg}`);
+            setLoginApiState({ kind: 'error', errno: 'create_wallet_failed', msg: n.msg });
+            return;
+          }
+          if (!address) {
+            emitToast('error', '[/login 跳过] createWallet 返回空 address');
+            setLoginApiState({ kind: 'error', errno: 'no_address', msg: 'createWallet returned no address' });
+            return;
+          }
         }
 
         const method = deriveMethod(opts.loginMethod, user);
@@ -189,7 +208,7 @@ export default function App() {
         exchangingRef.current = false;
       }
     },
-    [LOGIN_API_BASE, BIZ_PF, getAccessToken, identityToken, user, logout],
+    [LOGIN_API_BASE, BIZ_PF, getAccessToken, identityToken, user, logout, createWallet],
   );
 
   const { login, state } = useLoginWithTelegram({
