@@ -7,7 +7,7 @@ import { initRemoteLog } from './remoteLog';
 
 initRemoteLog(import.meta.env.VITE_LOG_ENDPOINT);
 
-const FALLBACK_APP_ID = 'cmbir1ip600bejx0mu6b42iek';
+const FALLBACK_APP_ID = 'cmdsozhfd004mlb0b47ukqv7s';
 
 const appId = import.meta.env.VITE_PRIVY_APP_ID || FALLBACK_APP_ID;
 
