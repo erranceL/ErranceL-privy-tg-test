@@ -125,8 +125,8 @@ export default function App() {
     { kind: 'idle' } | { kind: 'pending' } | { kind: 'success' } | { kind: 'error'; errno: string; msg: string }
   >({ kind: 'idle' });
 
-  const LOGIN_API_BASE = import.meta.env.VITE_LOGIN_API_BASE ?? '';
-  const BIZ_PF = import.meta.env.VITE_BIZ_PF ?? '4';
+  const LOGIN_API_BASE = (import.meta.env.VITE_LOGIN_API_BASE ?? '').trim();
+  const BIZ_PF = (import.meta.env.VITE_BIZ_PF ?? '4').trim();
 
   const runLoginExchange = useCallback(
     async (opts: { restored: boolean; loginMethod?: string | null }): Promise<void> => {
