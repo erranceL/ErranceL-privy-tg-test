@@ -354,6 +354,7 @@ export default function App() {
         initDataUnsafeUser: tgUnsafeUser,
       },
       buildBase: import.meta.env.BASE_URL,
+      privyAppId: import.meta.env.VITE_PRIVY_APP_ID || '(using FALLBACK)',
     }),
     [
       ready,
